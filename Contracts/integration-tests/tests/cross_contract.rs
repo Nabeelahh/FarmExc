@@ -5,13 +5,12 @@ extern crate std;
 use academy_rewards::AcademyRewardsContract;
 use messaging::UpgradeableMessagingContract;
 use shared::circuit_breaker::CircuitBreakerConfig;
-use shared::events::extended_topics;
 use shared::governance::ProposalStatus;
 use social_rewards::SocialRewardsContract;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    testutils::{Address as _, Events, Ledger},
-    token, Address, Env, String, Vec,
+    contract, contractimpl, contracttype,
+    testutils::{Address as _, Ledger},
+    token, Address, Env, String, Symbol, Vec,
 };
 use trading::UpgradeableTradingContract;
 
@@ -62,18 +61,28 @@ impl MockTokenContract {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: assert at least one event in env matches the given topic symbol
+// Helper: assert at least one published event matches the given topic symbol.
+//
+// soroban_sdk::Env::events().all() returns:
+//   Vec<(Address, soroban_sdk::Vec<Val>, Val)>
+//             contract  topics           data
+//
+// Topics are raw Val — the easiest cross-version way to compare is to
+// convert the expected Symbol to its raw Val bits via IntoVal, then
+// compare the u64 representations.
 // ─────────────────────────────────────────────────────────────────────────────
-fn assert_event_emitted(env: &Env, expected_topic: soroban_sdk::Symbol) {
-    let all_events = env.events().all();
-    let found = all_events.iter().any(|(_, topics, _)| {
-        topics.iter().any(|t| t == soroban_sdk::Val::from(expected_topic.clone()))
+fn assert_event_emitted(env: &Env, expected_topic: Symbol) {
+    use soroban_sdk::IntoVal;
+    let expected_val: soroban_sdk::Val = expected_topic.into_val(env);
+    let expected_bits = expected_val.get_payload();
+
+    let found = env.events().all().iter().any(|(_, topics, _)| {
+        topics
+            .iter()
+            .any(|t| t.get_payload() == expected_bits)
     });
-    assert!(
-        found,
-        "Expected event with topic {:?} was not emitted",
-        expected_topic
-    );
+
+    assert!(found, "Expected event with topic was not emitted");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +110,7 @@ fn test_academy_rewards_trigger_social_rewards() {
     };
 
     academy.initialize(&admin, &cb_config);
-    social.initialize(&admin);
+    social.init(&admin);
 
     academy.create_badge_type(
         &admin,
@@ -121,12 +130,10 @@ fn test_academy_rewards_trigger_social_rewards() {
     let record = academy.get_redemption_history(&user, &0u32).unwrap();
     assert_eq!(record.discount_applied, 500);
 
-    // ── Event assertions ──────────────────────────────────────────────────────
-    // academy-rewards emits a badge_mint and badge_redeem event
-    assert_event_emitted(&env, symbol_short!("bdg_mint"));
-    assert_event_emitted(&env, symbol_short!("bdg_redm"));
-    // social_rewards emits a reward event when add_reward is called
-    assert_event_emitted(&env, symbol_short!("reward"));
+    // ── Event assertions ─────────────────────────────────────────────────────
+    assert_event_emitted(&env, Symbol::new(&env, "bdg_mint"));
+    assert_event_emitted(&env, Symbol::new(&env, "bdg_redm"));
+    assert_event_emitted(&env, Symbol::new(&env, "reward"));
 }
 
 #[test]
@@ -141,10 +148,10 @@ fn test_trading_interacts_with_fee_distribution() {
     let trading_id = env.register_contract(None, UpgradeableTradingContract);
     let trading = trading::UpgradeableTradingContractClient::new(&env, &trading_id);
 
-    let admin = Address::generate(&env);
-    let approver = Address::generate(&env);
-    let executor = Address::generate(&env);
-    let trader = Address::generate(&env);
+    let admin        = Address::generate(&env);
+    let approver     = Address::generate(&env);
+    let executor     = Address::generate(&env);
+    let trader       = Address::generate(&env);
     let fee_recipient = Address::generate(&env);
 
     let mut approvers = Vec::new(&env);
@@ -156,7 +163,7 @@ fn test_trading_interacts_with_fee_distribution() {
         period_duration: 3600,
     };
 
-    trading.initialize(&admin, &approvers, &executor, &cb_config);
+    trading.init(&admin, &approvers, &executor, &cb_config);
     token_admin.mint(&trader, &1000i128);
 
     let fee_before_trader    = token::Client::new(&env, &token_id).balance(&trader);
@@ -164,7 +171,7 @@ fn test_trading_interacts_with_fee_distribution() {
 
     let trade_id = trading.trade(
         &trader,
-        &symbol_short!("XLMUSD"),
+        &Symbol::new(&env, "XLMUSD"),
         &250i128,
         &100i128,
         &true,
@@ -185,9 +192,9 @@ fn test_trading_interacts_with_fee_distribution() {
     assert_eq!(stats.total_trades, 1);
     assert_eq!(stats.total_volume, 250);
 
-    // ── Event assertions ──────────────────────────────────────────────────────
-    assert_event_emitted(&env, symbol_short!("trade"));
-    assert_event_emitted(&env, symbol_short!("fee"));
+    // ── Event assertions ─────────────────────────────────────────────────────
+    assert_event_emitted(&env, Symbol::new(&env, "trade"));
+    assert_event_emitted(&env, Symbol::new(&env, "fee"));
 }
 
 #[test]
@@ -217,7 +224,7 @@ fn test_messaging_notifications_from_other_contract_flows() {
         period_duration: 3600,
     };
 
-    messaging.initialize(&admin, &approvers, &executor, &cb_config);
+    messaging.init(&admin, &approvers, &executor, &cb_config);
     academy.initialize(&admin, &cb_config);
     academy.create_badge_type(
         &admin,
@@ -243,9 +250,9 @@ fn test_messaging_notifications_from_other_contract_flows() {
     assert_eq!(notifications.len(), 1);
     assert_eq!(notifications.get(0).unwrap().payload, payload);
 
-    // ── Event assertions ──────────────────────────────────────────────────────
-    assert_event_emitted(&env, symbol_short!("msg_sent"));
-    assert_event_emitted(&env, symbol_short!("bdg_redm"));
+    // ── Event assertions ─────────────────────────────────────────────────────
+    assert_event_emitted(&env, Symbol::new(&env, "msg_sent"));
+    assert_event_emitted(&env, Symbol::new(&env, "bdg_redm"));
 }
 
 #[test]
@@ -273,13 +280,13 @@ fn test_shared_governance_module_across_contracts() {
         period_duration: 3600,
     };
 
-    trading.initialize(&admin, &approvers, &executor, &cb_config);
-    messaging.initialize(&admin, &approvers, &executor, &cb_config);
+    trading.init(&admin, &approvers, &executor, &cb_config);
+    messaging.init(&admin, &approvers, &executor, &cb_config);
 
     let trading_proposal = trading.propose_upgrade(
         &admin,
-        &symbol_short!("tv2hash"),
-        &symbol_short!("UpgrTrade"),
+        &Symbol::new(&env, "tv2hash"),
+        &Symbol::new(&env, "UpgrTrade"),
         &approvers,
         &1u32,
         &3600u64,
@@ -288,8 +295,8 @@ fn test_shared_governance_module_across_contracts() {
 
     let messaging_proposal = messaging.propose_upgrade(
         &admin,
-        &symbol_short!("mv2hash"),
-        &symbol_short!("UpgrMsg"),
+        &Symbol::new(&env, "mv2hash"),
+        &Symbol::new(&env, "UpgrMsg"),
         &approvers,
         &1u32,
         &3600u64,
@@ -302,7 +309,7 @@ fn test_shared_governance_module_across_contracts() {
     assert_eq!(trade_status, ProposalStatus::Approved);
     assert_eq!(msg_status,   ProposalStatus::Approved);
 
-    // ── Event assertions ──────────────────────────────────────────────────────
-    assert_event_emitted(&env, symbol_short!("propose"));
-    assert_event_emitted(&env, symbol_short!("approve"));
+    // ── Event assertions ─────────────────────────────────────────────────────
+    assert_event_emitted(&env, Symbol::new(&env, "propose"));
+    assert_event_emitted(&env, Symbol::new(&env, "approve"));
 }
