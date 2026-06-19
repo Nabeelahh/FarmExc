@@ -1,403 +1,417 @@
-Contracts: SBT and Revocation
+# FarmExchange — Smart Contracts
 
-This folder contains example Solidity contracts and Circom circuits for the SBT identity feature.
+This directory contains the Soroban (Rust) smart contracts that hold and move funds, gate releases on milestone verification, and represent investor positions and reputation as on-chain assets. These contracts are the source of truth for the protocol — the `backend/` services read from and submit to them, but never hold custody themselves.
 
-Files added:
-
-- `contracts/SoulboundCredential.sol` — minimal non-transferable ERC-721 SBT implementation with issue/revoke/renew + expiration.
-- `contracts/RevocationRegistry.sol` — simple on-chain revocation registry.
-- `circuits/age_over_18.circom` — illustrative Circom circuit for proving age >= 18.
-- `circuits/accredited_investor.circom` — illustrative circuit for an accredited investor boolean claim.
-
-Deployment and testing
-
-- Use `hardhat` or `foundry` to compile and deploy the Solidity contracts. Install `@openzeppelin/contracts`.
-- For circuits, compile with `circom` and use `snarkjs` for trusted setup and proof generation.
-  📜 Stellara AI Smart Contracts (Soroban)
-
-Soroban smart contracts powering Stellara AI, a Web3 crypto learning and social trading platform built on the Stellar blockchain. These contracts provide decentralized services for education credentials, social rewards, messaging, and on-chain trading used by the Stellara backend and frontend applications.
-
-This repository is intended for blockchain developers, protocol contributors, and the Stellara platform infrastructure, serving as the trust layer for learning achievements, engagement rewards, user interactions, and decentralized trading features.
-
-## 🆕 Upgradeability & Governance
-
-**NEW**: All contracts now feature explicit upgradeability with on-chain governance support.
-
-✅ **Multi-Signature Approval**: Upgrades require M-of-N approvals (e.g., 2-of-3)  
-✅ **Timelock Delays**: Prevents immediate execution (configurable: 1-24+ hours)  
-✅ **Role-Based Control**: Admin, Approver, and Executor roles prevent single points of failure  
-✅ **Transparent Governance**: All proposals tracked on-chain and auditable  
-✅ **Comprehensive Tests**: 10+ test cases covering all upgrade scenarios
-
-**Documentation**:
-
-- [Upgradeability Design](./UPGRADEABILITY.md) - Complete architecture & security analysis
-- [Governance User Guide](./GOVERNANCE_GUIDE.md) - Step-by-step upgrade procedures
-- [Quick Reference](./QUICK_REFERENCE.md) - 30-second overview
-- [Implementation Summary](../IMPLEMENTATION_SUMMARY.md) - What was built
-
-## Overview
-
-This repository contains four core smart contracts that power the Stellara ecosystem:
-
-- **Trading Contract** (✨ **Now Upgradeable**): Decentralized exchange functionality for trading cryptocurrency pairs
-- **Academy Contract**: Credential management for course completion and learning achievements
-- **Social Rewards Contract**: Engagement tracking and reward distribution for community participation
-- **Messaging Contract**: Decentralized messaging between users with read status tracking
-
-## Project Structure
-
+```text
+contracts/
+├── funding-pool/
+├── escrow/
+├── marketplace/
+├── repayment/
+├── insurance/
+├── reputation/
+├── shared/
+└── README.md          # you are here
 ```
-├── contracts/
-│   ├── trading/         # ✨ Upgradeable DEX trading contract
-│   ├── academy/         # ✨ NEW: Academy vesting & rewards contract
-│   │   ├── VESTING_DESIGN.md           # Vesting architecture & design
-│   │   ├── VESTING_QUICK_REFERENCE.md  # Quick reference guide
-│   │   ├── INTEGRATION_GUIDE.md        # Backend/frontend integration
-│   │   ├── DELIVERY_SUMMARY.md         # Project completion summary
-│   │   └── README.md                   # Academy contract overview
-│   ├── social_rewards/  # Engagement rewards contract
-│   └── messaging/       # P2P messaging contract
-├── shared/              # ✨ NEW: Shared governance module (reusable)
-│   └── src/governance.rs # Multi-sig upgrade governance
-├── Cargo.toml          # Workspace configuration
-├── UPGRADEABILITY.md   # Upgradeability design documentation
-├── GOVERNANCE_GUIDE.md # Step-by-step governance procedures
-├── QUICK_REFERENCE.md  # Quick reference card
-└── README.md           # This file
-```
-
-## Prerequisites
-
-- Rust 1.70 or later (Install via https://rustup.rs/ - required for running `cargo test`)
-- Soroban SDK 20.5.0
-- Stellar CLI tools
-
-## Building
-
-```bash
-# Build all contracts
-cargo build --release --target wasm32-unknown-unknown
-
-# Build specific contract
-cd contracts/trading
-cargo build --release --target wasm32-unknown-unknown
-```
-
-## Testing
-
-```bash
-# Run all tests (including new governance tests)
-cargo test --all
-
-# On Windows (PowerShell), you can use the provided script:
-# .\test.ps1
-
-# Run specific contract tests
-cd contracts/trading
-cargo test  # Includes 10+ upgradeability tests
-```
-
-## Governance & Upgradeability
-
-### Quick Start
-
-All contracts now support governance-controlled upgrades:
-
-```bash
-# 1. Initialize with governance roles
-stellar contract invoke --id $CONTRACT_ID --source admin -- \
-  init --admin $ADMIN --approvers [$A1,$A2,$A3] --executor $EXECUTOR
-
-# 2. Propose an upgrade
-stellar contract invoke --id $CONTRACT_ID --source admin -- \
-  propose_upgrade --new_contract_hash $HASH --description "..." \
-  --approvers [$A1,$A2,$A3] --approval_threshold 2 --timelock_delay 3600
-
-# 3. Approvers vote (need 2 of 3)
-stellar contract invoke --id $CONTRACT_ID --source $APPROVER1 -- \
-  approve_upgrade --proposal_id 1
-
-# 4. Wait for timelock, then execute
-stellar contract invoke --id $CONTRACT_ID --source $EXECUTOR -- \
-  execute_upgrade --proposal_id 1
-```
-
-### Governance Features
-
-- ✅ **Multi-Sig Approval** (M-of-N): e.g., 2-of-3 signers required
-- ✅ **Timelock Delays**: Safety period (1-24+ hours) before execution
-- ✅ **Role-Based Control**: Admin, Approver, Executor roles
-- ✅ **Transparent**: All proposals on-chain and queryable
-- ✅ **Circuit Breakers**: Rejection and cancellation mechanisms
-
-### Documentation
-
-- **[UPGRADEABILITY.md](./UPGRADEABILITY.md)**: 10+ sections covering:
-  - Architecture with diagrams
-  - Security safeguards explained
-  - Complete governance process flow
-  - Smart contract implementation details
-  - Testing & validation strategy
-- **[GOVERNANCE_GUIDE.md](./GOVERNANCE_GUIDE.md)**: Practical guide with:
-  - Step-by-step CLI examples
-  - Multi-signature approval workflow
-  - Timelock management
-  - Error handling & troubleshooting
-  - Emergency procedures
-- **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)**: Cheat sheet with:
-  - 30-second overview
-  - Function reference
-  - Common scenarios
-  - Error codes
-
-## Deployment
-
-### Testnet Deployment
-
-1. Set up your Stellar CLI:
-
-```bash
-stellar config network set testnet https://soroban-testnet.stellar.org
-```
-
-2. Create a network configuration:
-
-```bash
-stellar config set --scope global RPC_URL https://soroban-testnet.stellar.org
-stellar config set --scope global NETWORK_PASSPHRASE "Test SDF Network ; September 2015"
-```
-
-3. Deploy contracts:
-
-```bash
-# Build WASM binaries
-cargo build --release --target wasm32-unknown-unknown
-
-# Deploy trading contract
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/trading_contract.wasm \
-  --source account-name \
-  --network testnet
-```
-
-4. Initialize contracts after deployment:
-
-```bash
-# Initialize trading contract with governance
-stellar contract invoke \
-  --id CONTRACT_ADDRESS \
-  --source account-name \
-  --network testnet \
-  -- init \
-  --admin "$ADMIN_ADDRESS" \
-  --approvers '["$APPROVER1", "$APPROVER2", "$APPROVER3"]' \
-  --executor "$EXECUTOR_ADDRESS"
-```
-
-## Contract Descriptions
-
-### Trading Contract ✨ (Upgradeable)
-
-Manages decentralized trading operations with governance support.
-
-**Key Functions:**
-
-- `init()`: Initialize with governance roles
-- `trade()`: Execute a trade on specified pair with fee collection
-- `get_stats()`: Retrieve trading statistics
-- `propose_upgrade()`: Propose contract upgrade
-- `approve_upgrade()`: Approve pending upgrade
-- `execute_upgrade()`: Execute approved upgrade
-- `pause()` / `unpause()`: Emergency pause functionality
-
-**Governance Functions:**
-
-- `propose_upgrade()`: Create upgrade proposal (Admin)
-- `approve_upgrade()`: Approve proposal (Approver)
-- `reject_upgrade()`: Reject proposal (Approver)
-- `execute_upgrade()`: Execute approved upgrade (Executor)
-- `cancel_upgrade()`: Cancel proposal (Admin)
-
-### Academy Contract (✨ NEW: Vesting & Rewards)
-
-Manages educational credentials, achievements, and secure vesting of academy rewards.
-
-**Two Core Features:**
-
-1. **Vesting Module** (NEW) - Time-based vesting of tokens/badges
-   - `grant_vesting()`: Create vesting schedule (admin only)
-   - `claim()`: Atomic claim of vested tokens (single-claim semantics)
-   - `revoke()`: Revoke grant with timelock protection
-   - `get_vesting()`: Query vesting schedule
-   - `get_vested_amount()`: Calculate current vested amount
-
-2. **Credentials** - Educational achievements
-   - `issue_credential()`: Award credential to user (admin only)
-   - `get_user_credentials()`: Retrieve user's credentials
-   - `verify_credential()`: Verify a credential exists
-
-**Vesting Features:**
-
-- ✅ Time-based vesting with cliff periods
-- ✅ Linear vesting after cliff
-- ✅ Single-claim semantics (prevents double-spend)
-- ✅ Governance revocation with 1+ hour timelock
-- ✅ Event emission for off-chain indexing
-- ✅ 18+ comprehensive tests
-
-**Documentation:**
-
-- [VESTING_DESIGN.md](./contracts/academy/VESTING_DESIGN.md) - Complete technical design
-- [VESTING_QUICK_REFERENCE.md](./contracts/academy/VESTING_QUICK_REFERENCE.md) - Quick start
-- [INTEGRATION_GUIDE.md](./contracts/academy/INTEGRATION_GUIDE.md) - Integration examples
-- [README.md](./contracts/academy/README.md) - Academy contract overview
-
-### Social Rewards Contract
-
-Tracks engagement and distributes rewards.
-
-**Key Functions:**
-
-- `init()`: Initialize the contract
-- `record_engagement()`: Record user engagement activity
-- `get_user_rewards()`: Get user's reward balance and tier
-- `get_engagement_history()`: Get user's engagement history
-- `claim_tier_reward()`: Claim rewards based on tier
-
-### Messaging Contract
-
-Enables decentralized P2P messaging.
-
-**Key Functions:**
-
-- `init()`: Initialize the contract
-- `send_message()`: Send message to recipient
-- `mark_as_read()`: Mark message as read
-- `get_messages()`: Get user's messages (received/sent)
-- `get_unread_count()`: Get count of unread messages
-- `get_stats()`: Retrieve messaging statistics
-
-## Environment Variables
-
-For deployment, set these environment variables:
-
-```bash
-# Stellar account secret key
-export STELLAR_SECRET_KEY="your-secret-key"
-
-# Network configuration (testnet by default)
-export SOROBAN_NETWORK="testnet"
-export SOROBAN_RPC_URL="https://soroban-testnet.stellar.org"
-
-# Governance configuration
-export ADMIN_ADDRESS="G..."
-export APPROVER_1="G..."
-export APPROVER_2="G..."
-export APPROVER_3="G..."
-export EXECUTOR_ADDRESS="G..."
-```
-
-## Event Schema
-
-All on-chain state changes emit standardised events via `shared::events`. Off-chain indexers and the subgraph subscribe to these topics to power dashboards, notifications, and audit trails.
-
-### Topic Reference
-
-| Topic constant | `symbol_short` value | Emitting contract(s) | Payload struct |
-|---|---|---|---|
-| `TRADE_EXECUTED` | `trade` | trading | `TradeExecutedEvent` |
-| `FEE_COLLECTED` | `fee` | trading, liquidity-mining | `FeeCollectedEvent` |
-| `CONTRACT_PAUSED` | `paused` | trading, amm, parametric-insurance | `ContractPausedEvent` |
-| `CONTRACT_UNPAUSED` | `unpause` | trading, amm, parametric-insurance | `ContractUnpausedEvent` |
-| `PROPOSAL_CREATED` | `propose` | trading, messaging, amm, stablecoin-reserve | `ProposalCreatedEvent` |
-| `PROPOSAL_APPROVED` | `approve` | trading, messaging, amm, stablecoin-reserve | `ProposalApprovedEvent` |
-| `PROPOSAL_REJECTED` | `reject` | trading, messaging, amm, stablecoin-reserve | `ProposalRejectedEvent` |
-| `PROPOSAL_EXECUTED` | `execute` | trading, messaging, amm, stablecoin-reserve | `ProposalExecutedEvent` |
-| `PROPOSAL_CANCELLED` | `cancel` | trading, messaging, amm, stablecoin-reserve | `ProposalCancelledEvent` |
-| `REWARD_ADDED` | `reward` | social-rewards | `RewardAddedEvent` |
-| `REWARD_CLAIMED` | `claimed` | social-rewards | `RewardClaimedEvent` |
-| `POLICY_CREATED` | `pol_crt` | parametric-insurance | `PolicyCreatedEvent` |
-| `POLICY_CANCELLED` | `pol_cnl` | parametric-insurance | `PolicyCancelledEvent` |
-| `POLICY_EXPIRED` | `pol_exp` | parametric-insurance | `PolicyExpiredEvent` |
-| `TRIGGER_ACTIVATED` | `trig_act` | parametric-insurance | `TriggerActivatedEvent` |
-| `CLAIM_PAID` | `clm_paid` | parametric-insurance | `ClaimPaidEvent` |
-| `LIQUIDITY_DEPOSITED` | `liq_dep` | parametric-insurance | `LiquidityDepositedEvent` |
-| `LIQUIDITY_WITHDRAWN` | `liq_wdraw` | parametric-insurance | `LiquidityWithdrawnEvent` |
-| `TRANSFER` | `transfer` | token | — |
-| `MINT` | `mint` | token | — |
-| `BURN` | `burn` | token | — |
-| `APPROVE` | `approve` | token | — |
-| `VESTING_GRANTED` | `v_grant` | academy (vesting) | `VestingGrantedEvent` |
-| `VESTING_CLAIMED` | `v_claim` | academy (vesting) | `VestingClaimedEvent` |
-| `VESTING_REVOKED` | `v_revoke` | academy (vesting) | `VestingRevokedEvent` |
-| `DID_CREATED` | `did_crt` | did-registry | `DidCreatedEvent` |
-| `DID_UPDATED` | `did_upd` | did-registry | `DidUpdatedEvent` |
-| `DID_DEACTIVATED` | `did_deact` | did-registry | `DidDeactivatedEvent` |
-| `VERIF_METHOD_ADDED` | `vm_added` | did-registry | `VerificationMethodAddedEvent` |
-| `SERVICE_ADDED` | `svc_added` | did-registry | `ServiceAddedEvent` |
-| `HUB_CREATED` | `hub_crt` | identity-hub | `HubCreatedEvent` |
-| `DATA_ENTRY_ADDED` | `data_add` | identity-hub | `DataEntryAddedEvent` |
-| `PERM_GRANTED` | `prm_grnt` | identity-hub | `PermissionGrantedEvent` |
-| `PERM_REVOKED` | `perm_rev` | identity-hub | `PermissionRevokedEvent` |
-| `DISCLOSURE_CREATED` | `disc_crt` | identity-hub | `SelectiveDisclosureCreatedEvent` |
-| `CREDENTIAL_ISSUED` | `cred_iss` | verifiable-credentials | `CredentialIssuedEvent` |
-| `CREDENTIAL_REVOKED` | `cred_rev` | verifiable-credentials | `CredentialRevokedEvent` |
-| `ASSET_REGISTERED` | `asset_reg` | synthetic-assets | `AssetRegisteredEvent` |
-| `CDP_OPENED` | `cdp_open` | synthetic-assets | `CdpOpenedEvent` |
-| `CDP_CLOSED` | `cdp_close` | synthetic-assets | `CdpClosedEvent` |
-| `COLLATERAL_ADDED` | `col_add` | synthetic-assets | `CollateralAddedEvent` |
-| `CDP_LIQUIDATED` | `cdp_liq` | synthetic-assets | `CdpLiquidatedEvent` |
-| `PRICE_UPDATED` | `price_upd` | synthetic-assets | `PriceUpdatedEvent` |
-| `TCR_APPLIED` | `tcr_apply` | tcr | `TcrApplicationEvent` |
-| `TCR_CHALLENGED` | `tcr_chall` | tcr | `TcrChallengedEvent` |
-| `TCR_VOTED` | `tcr_vote` | tcr | `TcrVotedEvent` |
-| `TCR_RESOLVED` | `tcr_resol` | tcr | `TcrResolvedEvent` |
-| `RESERVE_ASSET_ADDED` | `res_add` | stablecoin-reserve | `ReserveAssetAddedEvent` |
-| `RESERVE_ASSET_UPDATED` | `res_upd` | stablecoin-reserve | `ReserveAssetUpdatedEvent` |
-
-### Indexer Integration
-
-All event structs are defined in `shared/src/events.rs` and annotated with `#[contracttype]` so the Soroban XDR SDK can decode them directly. Subscribe to any topic via the Stellar Horizon `transactions` or `effects` streams, or use the `stellar-monitor` backend module which already polls for these events.
-
-## Security Considerations
-
-- ✅ All contracts implement authentication via `require_auth()`
-- ✅ Admin functions protected with role verification
-- ✅ Contract storage uses instance storage for state management
-- ✅ **NEW**: Upgradeable via multi-sig governance (prevents rogue upgrades)
-- ✅ **NEW**: Timelock delays provide reaction window (1-24+ hours)
-- ✅ **NEW**: Transparent proposal system (all changes auditable)
-
-## Ecosystem Repositories
-
-🌐 **Frontend** (Next.js): https://github.com/Dev-shamoo/Stellara_Ai  
-⚙ **Backend** (NestJS): https://github.com/shamoo53/Stellara_Ai_backend  
-⭐ **Stellar Docs**: https://developers.stellar.org/docs/smart-contracts/soroban/
-
-## Contributing
-
-🤝 Contributing:
-
-- Fork the repository
-- Create a feature branch
-- Submit a pull request
-
-Please ensure all tests pass and documentation is updated with your changes.
 
 ---
 
-**Last Updated**: January 22, 2026  
-**Version**: 2.0 (with Upgradeability & Governance)  
-**Status**: Production Ready
-Commit your changes
-git pull latest changes to avoid conflicts
-Submit a pull request
-Issues and feature requests are welcome.
+## Design Principles
 
-When adding new features:
+- **No off-chain custody.** Funds move directly between investor, escrow, and farmer/buyer addresses via contract logic. The backend can prepare and relay transactions but cannot unilaterally move funds.
+- **Oracles supply data, contracts decide outcomes.** The `oracle-service` submits weather/satellite readings; whether a payout or milestone release actually fires is evaluated by contract logic, not asserted by the off-chain submitter.
+- **Composability over silos.** Investor positions and reputation are minted as transferable/non-transferable tokens respectively, so they're usable outside FarmExchange's own frontend.
+- **Fail safe, not fail silent.** Disputed or ambiguous states (contested milestones, threshold edge cases) default to holding funds in escrow pending resolution, not releasing by default.
 
-1. Create a new function in the appropriate contract
-2. Add corresponding tests
-3. Update this README with new function documentation
-4. Ensure all tests pass before submitting
+---
+
+## Contract Overview
+
+| Contract | Holds funds? | Mints tokens? | Depends on |
+|---|---|---|---|
+| `funding-pool` | Yes (until forwarded to escrow) | Yes — investor position tokens | `shared` |
+| `escrow` | Yes | No | `funding-pool`, `reputation` (reads agent stake) |
+| `marketplace` | Yes (buyer funds in transit) | No | `escrow`, `reputation` |
+| `repayment` | Transiently (during distribution) | No | `funding-pool`, `escrow`, `insurance` |
+| `insurance` | Yes (risk reserve) | No | `repayment`, oracle data feed |
+| `reputation` | No | Yes — soulbound (non-transferable) score tokens | `shared` |
+| `shared` | No | No | — |
+
+---
+
+## 1. `funding-pool/`
+
+### Responsibility
+
+Creates campaigns, accepts investor deposits, and mints a transferable token representing each investor's proportional claim on that campaign's eventual repayment.
+
+### Key State
+
+```text
+Campaign {
+    id: u64,
+    farmer_or_cooperative: Address,
+    target_amount: i128,
+    raised_amount: i128,
+    asset: Address,            // USDC or XLM contract address
+    milestones: Vec<Milestone>,
+    status: CampaignStatus,    // Open, Funded, Active, Completed, Defaulted
+}
+```
+
+### Key Functions
+
+```rust
+fn create_campaign(env: Env, farmer: Address, target: i128, asset: Address, milestones: Vec<Milestone>) -> u64;
+fn deposit(env: Env, investor: Address, campaign_id: u64, amount: i128);
+fn close_funding(env: Env, campaign_id: u64);
+fn get_position(env: Env, investor: Address, campaign_id: u64) -> i128;
+fn transfer_position(env: Env, from: Address, to: Address, campaign_id: u64, amount: i128);
+```
+
+### Position Tokens
+
+Each `deposit` mints (or increases) a position-token balance for the investor, scoped per campaign. `transfer_position` allows secondary transfer before the campaign settles — this is what gives investors exit liquidity instead of being locked in until harvest. Position tokens are implemented as a lightweight balance map within this contract rather than a separate SAC per campaign, to avoid the overhead of deploying a new asset contract for every campaign; a SAC-wrapped version is a Phase 2 consideration if secondary-market tooling needs standard token interfaces.
+
+### Events Emitted
+
+```text
+campaign_created(campaign_id, farmer, target)
+deposit_made(campaign_id, investor, amount)
+funding_closed(campaign_id, raised_amount)
+position_transferred(campaign_id, from, to, amount)
+```
+
+### Invariants
+
+- `raised_amount` never exceeds `target_amount` (excess deposits rejected, not partially accepted).
+- Funds only move to `escrow` once `close_funding` is called — `funding-pool` never pays a farmer or buyer directly.
+
+---
+
+## 2. `escrow/`
+
+### Responsibility
+
+Holds funds transferred from a closed `funding-pool` campaign and releases them incrementally as milestones are verified.
+
+### Key State
+
+```text
+Milestone {
+    name: Symbol,
+    release_amount: i128,
+    status: MilestoneStatus,   // Pending, Attested, Disputed, Released
+    attestations: Vec<Attestation>,
+}
+
+Attestation {
+    agent: Address,
+    evidence_hash: BytesN<32>,  // hash of photo/GPS evidence stored off-chain
+    signed_at: u64,
+}
+```
+
+### Key Functions
+
+```rust
+fn fund_escrow(env: Env, campaign_id: u64, amount: i128);
+fn submit_attestation(env: Env, campaign_id: u64, milestone_idx: u32, agent: Address, evidence_hash: BytesN<32>);
+fn release_milestone(env: Env, campaign_id: u64, milestone_idx: u32);
+fn raise_dispute(env: Env, campaign_id: u64, milestone_idx: u32, disputer: Address);
+fn resolve_dispute(env: Env, campaign_id: u64, milestone_idx: u32, signers: Vec<Address>, approve: bool);
+```
+
+### Milestone Release Logic
+
+1. A registered, staked agent calls `submit_attestation` with a hash of their off-chain evidence (GPS + photo, stored in object storage by the backend — only the hash lives on-chain for integrity verification).
+2. For low-value milestones, a single agent attestation is sufficient and `release_milestone` can be called once attested.
+3. For high-value or flagged milestones, `release_milestone` requires the multi-party threshold defined in `shared::DisputeConfig` (default: 2-of-3 independent agents) before funds move.
+4. `raise_dispute` can be called by the farmer, an investor, or another agent within a defined window after attestation, freezing release pending `resolve_dispute`.
+5. A fraudulent attestation that is later overturned via dispute resolution triggers a slashing call against the attesting agent's stake (held and enforced in `reputation`/agent-staking logic — see below).
+
+### Why Evidence Hashes, Not Raw Evidence, On-Chain
+
+Storing a hash rather than the photo/GPS payload keeps the contract cheap to call and avoids putting potentially large or sensitive media on a public ledger. The hash lets anyone verify that the evidence referenced by the backend hasn't been altered after the fact, without requiring the chain itself to store it.
+
+### Events Emitted
+
+```text
+escrow_funded(campaign_id, amount)
+milestone_attested(campaign_id, milestone_idx, agent)
+milestone_released(campaign_id, milestone_idx, amount)
+dispute_raised(campaign_id, milestone_idx, disputer)
+dispute_resolved(campaign_id, milestone_idx, approved)
+```
+
+---
+
+## 3. `marketplace/`
+
+### Responsibility
+
+Lists harvested products for sale, supports forward contracts agreed before harvest, and escrows buyer funds until delivery is confirmed.
+
+### Key State
+
+```text
+Listing {
+    id: u64,
+    campaign_id: u64,
+    product: Symbol,
+    quantity: i128,
+    price_per_unit: i128,
+    status: ListingStatus,      // Open, ForwardLocked, Sold, Delivered, Disputed
+}
+
+ForwardContract {
+    listing_id: u64,
+    buyer: Address,
+    locked_price: i128,
+    locked_quantity: i128,
+    delivery_deadline: u64,
+}
+```
+
+### Key Functions
+
+```rust
+fn create_listing(env: Env, campaign_id: u64, product: Symbol, quantity: i128, price: i128) -> u64;
+fn lock_forward_contract(env: Env, listing_id: u64, buyer: Address, quantity: i128, deadline: u64);
+fn purchase(env: Env, listing_id: u64, buyer: Address, amount_paid: i128);
+fn confirm_delivery(env: Env, listing_id: u64, buyer: Address);
+fn raise_delivery_dispute(env: Env, listing_idx: u64, disputer: Address);
+```
+
+### Settlement Flow
+
+1. Buyer funds are received into this contract's escrow on `purchase` or at forward-contract execution.
+2. `confirm_delivery` (called by the buyer, or by an agent acting as a neutral confirming party for forward contracts) releases funds toward `repayment` for distribution.
+3. If delivery is disputed, funds remain held pending the same multi-party resolution pattern used in `escrow`.
+
+### Events Emitted
+
+```text
+listing_created(listing_id, campaign_id, quantity, price)
+forward_contract_locked(listing_id, buyer, quantity, deadline)
+purchase_made(listing_id, buyer, amount)
+delivery_confirmed(listing_id)
+delivery_disputed(listing_id, disputer)
+```
+
+---
+
+## 4. `repayment/`
+
+### Responsibility
+
+Calculates and executes the final distribution once a campaign's harvest sale or forward contract settles: investor principal + profit, farmer proceeds, and protocol fee routing.
+
+### Key Functions
+
+```rust
+fn distribute(env: Env, campaign_id: u64, total_revenue: i128);
+fn calculate_investor_share(env: Env, campaign_id: u64, investor: Address) -> i128;
+fn set_fee_bps(env: Env, new_fee_bps: u32); // governance-gated
+```
+
+### Distribution Logic
+
+Given `total_revenue` received from `marketplace` (or a direct harvest sale path):
+
+1. Protocol fee (`fee_bps`, e.g., 150 = 1.5%) is deducted first and routed to the treasury, with a configurable portion forwarded to `insurance`'s risk reserve.
+2. Remaining revenue is split proportionally across all `funding-pool` position-token holders for that campaign, covering principal plus their share of profit.
+3. Any remainder after investor repayment goes to the farmer/cooperative address.
+4. If `insurance` reports an active payout for this campaign (e.g., partial crop failure), that payout is netted into the investor distribution so investors aren't double-counting insurance and harvest revenue.
+
+### Events Emitted
+
+```text
+revenue_distributed(campaign_id, total_revenue, fee_amount)
+investor_paid(campaign_id, investor, amount)
+farmer_paid(campaign_id, amount)
+```
+
+### Why This Is a Separate Contract From `funding-pool`
+
+Distribution logic is the most financially sensitive code path in the protocol and changes shape as new revenue sources are added (insurance payouts, carbon credits in Phase 3). Isolating it makes it auditable and upgradable independently of the deposit-taking logic in `funding-pool`, which should change far less often.
+
+---
+
+## 5. `insurance/`
+
+### Responsibility
+
+Holds a pooled risk reserve (funded by protocol fees) and issues parametric payouts when oracle-submitted weather data crosses a campaign's defined threshold — without requiring a manual claims process.
+
+### Key State
+
+```text
+PolicyTerms {
+    campaign_id: u64,
+    trigger_metric: Symbol,      // e.g., "rainfall_mm"
+    threshold: i128,
+    window_start: u64,
+    window_end: u64,
+    payout_amount: i128,
+}
+```
+
+### Key Functions
+
+```rust
+fn register_policy(env: Env, campaign_id: u64, terms: PolicyTerms);
+fn submit_oracle_reading(env: Env, campaign_id: u64, metric: Symbol, value: i128, observed_at: u64); // oracle-service only
+fn evaluate_trigger(env: Env, campaign_id: u64) -> bool;
+fn execute_payout(env: Env, campaign_id: u64);
+fn fund_reserve(env: Env, amount: i128); // fed by repayment's fee routing
+```
+
+### Trigger Evaluation
+
+`submit_oracle_reading` can only be called by the address configured as the authorized oracle signer (the `oracle-service`'s dedicated key — see `backend/README.md`). The contract itself — not the oracle submitter — decides whether `evaluate_trigger` returns true, by comparing submitted readings against `PolicyTerms`. This separation means a compromised oracle key can submit bad *data*, but cannot directly authorize a payout outside the threshold logic; it's still a meaningful trust assumption on data integrity, which is why oracle key custody is treated as a high-sensitivity operational concern.
+
+### Events Emitted
+
+```text
+policy_registered(campaign_id, terms)
+oracle_reading_submitted(campaign_id, metric, value)
+trigger_evaluated(campaign_id, triggered: bool)
+payout_executed(campaign_id, amount)
+reserve_funded(amount)
+```
+
+### Reserve Solvency
+
+`evaluate_trigger` checks reserve balance before allowing `execute_payout` to proceed; if the reserve is insufficient, the payout is recorded as a partial/pending liability rather than silently failing, so it's visible on-chain and addressable via governance (top-up, or adjusted future fee allocation).
+
+---
+
+## 6. `reputation/`
+
+### Responsibility
+
+Issues non-transferable ("soulbound") score tokens for farmers, cooperatives, and field agents, and manages the stake bonds agents post to participate in milestone attestation.
+
+### Key State
+
+```text
+ReputationRecord {
+    entity: Address,
+    role: EntityRole,           // Farmer, Cooperative, Agent
+    completed_campaigns: u32,
+    defaulted_campaigns: u32,
+    successful_attestations: u32,
+    slashed_attestations: u32,
+    score: i128,
+}
+
+AgentStake {
+    agent: Address,
+    staked_amount: i128,
+    locked_until: u64,
+}
+```
+
+### Key Functions
+
+```rust
+fn record_campaign_outcome(env: Env, entity: Address, outcome: CampaignOutcome);
+fn get_score(env: Env, entity: Address) -> i128;
+fn stake(env: Env, agent: Address, amount: i128);
+fn slash(env: Env, agent: Address, amount: i128, reason: Symbol); // callable only by escrow on confirmed dispute resolution
+fn unstake(env: Env, agent: Address);
+```
+
+### Non-Transferability
+
+Reputation tokens deliberately have no `transfer` function — they are write-once-per-event, read-many records bound to an address. This is what makes them usable by other protocols later as a portable credential rather than a FarmExchange-internal score: anyone can read `get_score`, but no one (including the entity itself) can move or sell reputation.
+
+### Agent Staking & Slashing
+
+Agents must `stake` before they're eligible to call `submit_attestation` in `escrow`. `slash` is restricted to being called by the `escrow` contract itself, and only following a confirmed dispute resolution against that agent — this prevents `reputation` from being a second, inconsistent source of truth about whether an attestation was fraudulent.
+
+### Events Emitted
+
+```text
+reputation_updated(entity, new_score)
+agent_staked(agent, amount)
+agent_slashed(agent, amount, reason)
+agent_unstaked(agent, amount)
+```
+
+---
+
+## `shared/`
+
+Common code used across contracts to avoid duplication and drift:
+
+```text
+shared/
+├── src/
+│   ├── types.rs         # Shared structs (Milestone, DisputeConfig, etc.)
+│   ├── errors.rs         # Common error enum, consistent error codes across contracts
+│   ├── access.rs         # Role-check helpers (is_oracle, is_registered_agent, etc.)
+│   └── test_utils.rs      # Shared test fixtures/mocks for integration tests
+└── Cargo.toml
+```
+
+Other contracts depend on `shared` as a library crate, not as a deployed contract — it has no callable entrypoints of its own.
+
+---
+
+## Cross-Contract Interaction Diagram (textual)
+
+```text
+funding-pool ──(on close_funding)──> escrow
+escrow ──(on milestone_released)──> farmer / repayment
+marketplace ──(on delivery_confirmed)──> repayment
+repayment ──(fee routing)──> insurance (reserve)
+repayment ──(reads positions)──> funding-pool
+insurance ──(payout)──> repayment (netted into distribution)
+escrow ──(on confirmed dispute)──> reputation (slash)
+funding-pool / escrow / marketplace ──(on outcome)──> reputation (record_campaign_outcome)
+oracle-service (off-chain) ──(submit_oracle_reading)──> insurance
+agents (off-chain, via backend) ──(submit_attestation)──> escrow
+```
+
+---
+
+## Access Control Summary
+
+| Action | Who can call |
+|---|---|
+| `create_campaign` | KYC-verified farmer/cooperative (checked off-chain by backend before relay; contract also checks a verified-address allowlist) |
+| `submit_attestation` | Registered, staked agent only |
+| `release_milestone` | Anyone, but only succeeds if attestation threshold is met |
+| `slash` | `escrow` contract only (cross-contract call) |
+| `submit_oracle_reading` | Configured oracle signer address only |
+| `set_fee_bps` | Governance address (multisig/DAO in Phase 4; single admin key in Phase 1, clearly flagged as a centralization point to be removed) |
+
+---
+
+## Build & Test
+
+```bash
+# from contracts/<contract-name>
+cargo build --target wasm32-unknown-unknown --release
+cargo test
+
+# deploy to testnet (example)
+soroban contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/<contract_name>.wasm \
+  --network testnet \
+  --source <deployer-identity>
+```
+
+Each contract has its own `Cargo.toml` and test suite. Integration tests that span multiple contracts (e.g., full campaign lifecycle from deposit through distribution) live in a top-level `contracts/integration-tests/` crate (not shown above as a deployed contract) that exercises the real cross-contract calls against a local Soroban test network rather than mocking contract boundaries.
+
+---
+
+## Security Notes
+
+- **Phase 1 admin key**: `set_fee_bps` and a few other governance-style functions are gated behind a single admin key in the initial pilot, not a DAO. This is called out explicitly here because it's a real centralization/trust assumption, not an oversight — Phase 4 roadmap moves this to multisig/DAO control.
+- **Reentrancy**: cross-contract calls (e.g., `escrow` → `reputation::slash`) follow checks-effects-interactions ordering; state is updated before external calls where Soroban's execution model requires it.
+- **Oracle trust**: the protocol trusts data submitted by the configured oracle signer; it does not trust that signer to decide outcomes (see `insurance` notes above). Compromise of the oracle key is a credible risk and is treated as such in `backend/README.md`'s key-management notes.
+- **Upgradability**: contracts are deployed with explicit version tracking; any upgrade path (Soroban contract upgrade or redeploy-and-migrate) requires the same governance gate as `set_fee_bps`, not a unilateral admin action outside that path.
+- **Audit status**: this is pilot-stage code. A third-party audit is expected before mainnet deployment with real investor capital beyond the pilot's bounded scope — this should be stated plainly in any grant application rather than implied.

@@ -1,156 +1,292 @@
-Stellara_backend
-🚀 Stellara Backend — Web3 Crypto Academy Server
+# FarmExchange — Backend
 
-Stellara Backend is the server-side application powering Stellara AI, a next-generation Web3 learning and social trading platform built on the Stellar blockchain ecosystem. It is designed for crypto learners and traders who need real-time communication, secure account systems, AI-assisted learning tools, and on-chain trading services.
+This directory contains the off-chain backend infrastructure for FarmExchange: the application server, the contract-event indexer, and the oracle bridge service. None of these services hold custody of funds — all value transfer happens on-chain in the Soroban contracts under `/contracts`. The backend exists to make that on-chain activity usable: authentication, KYC orchestration, off-chain data feeds, queryable history, and notifications.
 
-This backend manages authentication, courses, rewards, social feeds, messaging, AI integrations, and blockchain interactions, while exposing REST APIs and WebSocket gateways consumed by the Stellara AI frontend.
-
-🚀 Overview
-Stellara AI is designed to educate, empower, and connect crypto users by combining:
-
-A crypto learning academy with structured courses and quizzes
-An AI-powered assistant with text and voice guidance
-A social crypto network with posts, comments, and interactions
-Real-time messaging for one-on-one and group discussions
-On-chain trading tools integrated with Stellar wallets
-Live market news and insights powered by AI
-The backend is responsible for securely managing the core application logic, database interactions, and blockchain integrations.
-
-🧠 Core Features
-🤖 Stellara AI Assistant
-Text & voice-based AI crypto mentor
-Explains trading strategies, blockchain concepts, and Stellar-specific tools
-Provides market insights & educational guidance (not financial advice)
-🎓 Crypto Academy
-Structured learning paths (Beginner → Pro)
-Stellar & Soroban smart contract education
-Interactive quizzes and progress tracking
-🗣 Social Crypto Feed
-Post updates, ideas, and market thoughts
-Like, comment, repost (tweet-style)
-Follow other traders & educators
-💬 Community Chat
-One-on-one messaging
-Group discussions & learning channels
-Trading & ecosystem-focused rooms
-📈 Trading & Wallet
-Trade Stellar-based assets
-Freighter wallet integration
-Portfolio overview & transaction history
-📰 News & Market Intelligence
-Real-time crypto news
-Stellar ecosystem updates
-Market trend summaries via AI
-🛠 Technology Stack
-Backend
-NestJS – API framework
-PostgreSQL – Relational database
-Redis – Caching & real-time messaging
-WebSocket Gateway – Real-time chat & feed
-Blockchain
-Stellar SDK & Horizon API
-Soroban Smart Contracts
-Freighter Wallet integration
-AI & Voice
-LLM API (OpenAI or equivalent)
-Speech-to-Text (Whisper or similar)
-Text-to-Speech (TTS)
-Infrastructure
-Docker for containerization
-AWS / Railway / Render for backend hosting
-Vercel for frontend deployment
-💎 Why Stellara AI Works
-Instantly signals AI intelligence
-Strong connection to Stellar blockchain
-Easy to market & brand
-Scales to mobile apps, APIs, and future tools
-Credible to investors and partners
-⚡ Getting Started
-
-✅ Requirements
-
-- Node.js v18+
-- PostgreSQL
-- Redis
-- npm or pnpm
-
-📦 Installation
-
-```bash
-git clone https://github.com/stellara-network/Stellara_Contracts
-cd Stellara_Contracts/Backend
-npm install
+```text
+backend/
+├── api/
+├── indexer/
+├── oracle-service/
+└── README.md          # you are here
 ```
 
-🔐 Secrets Management
+---
 
-This project uses **HashiCorp Vault** for secure secrets management. Secrets are NOT stored in the repository.
+## Services Overview
 
-**Quick Start:**
+| Service | Purpose | Talks to chain? |
+|---|---|---|
+| `api` | REST/WebSocket server for the frontend; campaign metadata, KYC orchestration, agent management, notifications | Reads + submits transactions via Stellar SDK |
+| `indexer` | Subscribes to Soroban contract events, builds queryable historical views for dashboards | Reads only (event subscription) |
+| `oracle-service` | Pulls weather/satellite data, formats and submits it on-chain for insurance triggers and milestone cross-checks | Submits oracle update transactions |
 
-1. **Local Development with Vault:**
-   ```bash
-   # Start Vault dev server (in a separate terminal)
-   vault server -dev
-   
-   # In another terminal, provision development secrets
-   export VAULT_ADDR='http://localhost:8200'
-   export VAULT_TOKEN='devroot'
-   ./scripts/vault/provision-dev.sh
-   ```
+These are deployed as separate processes so the indexer and oracle service can scale, restart, and fail independently of the user-facing API.
 
-2. **Local Development with .env.local:**
-   ```bash
-   # Create .env.local (ignored by git)
-   cp .env.example .env.local
-   # Edit .env.local with your development secrets
-   ```
+---
 
-**For detailed setup instructions, see:**
-- [Local Secrets Setup Guide](./docs/LOCAL_SECRETS_SETUP.md)
-- [Secrets Management Strategy](./docs/SECRETS_MANAGEMENT.md)
-- [Vault Client Implementation](./docs/VAULT_CLIENT_NODEJS.md)
+## 1. `api/` — Application Server
 
-⚠️ **SECURITY**: Never commit real secrets to the repository. See [.gitignore](.gitignore) for ignored files.
+### Responsibility
 
-▶ Run Development Server npm run start:dev
+The `api` service is the system of record for everything that is **not** suitable to store on-chain: user profiles, campaign descriptions and media, agent assignments, KYC status, and notification preferences. It also acts as the orchestration layer that prepares and (where the user has delegated signing) submits Soroban transactions.
 
-▶ Run Development Server npm run start:dev
+### Tech Stack
 
-🧪 Testing npm run test npm run test:e2e
+- **NestJS** (TypeScript) — modular structure, dependency injection, guards for auth
+- **PostgreSQL** — primary datastore
+- **Prisma ORM** — schema + migrations
+- **Redis** — session cache, rate limiting, job queue backing (BullMQ)
+- **Stellar SDK / Soroban client** — transaction building and submission
+- **REST + WebSocket** — REST for standard CRUD, WebSocket for live campaign/funding status updates
 
-🤝 Contributing The first step is to Fork the repository then you Create a feature branch Commit your changes git pull latest changes to avoid conflicts Submit a pull request Issues and feature requests are welcome.
+### Folder Structure
 
-🗄️ Database & Migrations Workflow
+```text
+api/
+├── src/
+│   ├── modules/
+│   │   ├── auth/                # Wallet-based auth (challenge-response signing), session management
+│   │   ├── users/                # Farmer, investor, buyer, agent profiles
+│   │   ├── kyc/                  # Stellar1KYC integration — see below
+│   │   ├── campaigns/            # Campaign creation, milestone definitions, status
+│   │   ├── investors/            # Funding contributions, position token tracking (read-side)
+│   │   ├── agents/                # Field agent registration, staking status, attestation submission
+│   │   ├── marketplace/          # Harvest listings, forward contracts (metadata + status)
+│   │   ├── insurance/            # Risk reserve status, payout history (read-side)
+│   │   ├── reputation/           # Reputation score read API
+│   │   └── notifications/        # Email/SMS/push for milestone updates, payouts, disputes
+│   ├── common/
+│   │   ├── guards/                # Auth guards, role guards
+│   │   ├── interceptors/
+│   │   ├── filters/                # Exception filters
+│   │   └── decorators/
+│   ├── contracts-client/          # Thin wrapper around the Soroban SDK calls used across modules
+│   ├── config/
+│   └── main.ts
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── test/
+└── package.json
+```
 
-Para garantizar la integridad de los datos y la consistencia entre entornos, este proyecto utiliza **TypeORM Migrations** y **Docker**.
+### Module Notes
 
-1. Infraestructura Local
-Levanta la base de datos PostgreSQL utilizando el contenedor preconfigurado:
-bash
-docker-compose up -d
+**`auth`**
+Authentication is wallet-based, not password-based. Flow: client requests a one-time challenge → signs it with their Stellar keypair → server verifies the signature and issues a session token (JWT, short-lived, refreshed via Redis-backed refresh tokens). Field agents and cooperative admins additionally carry a role claim used by route guards.
 
-Nota: La base de datos está mapeada al puerto 5433 para evitar conflictos con instalaciones locales preexistentes.
+**`kyc`**
+Wraps calls to the Stellar1KYC service rather than reimplementing identity verification. On registration, this module:
+1. Checks if the user already has a valid Stellar1KYC credential (the "verify once, use everywhere" model).
+2. If not, initiates the verification flow and stores only the resulting credential reference — never raw KYC documents — in our database.
+3. Exposes a `kycStatus` field consumed by `campaigns` and `agents` to gate actions that require verified identity (e.g., a farmer cannot launch a campaign, an agent cannot stake, until KYC clears).
 
-2. Comandos de Migración
-Utiliza estos scripts para gestionar el esquema de la base de datos sin usar synchronize: true:
+**`campaigns`**
+Stores campaign metadata not suited for on-chain storage (descriptions, images, cooperative grouping, milestone narrative text). The actual funding-pool contract address, target amount, and on-chain status are fetched live via `contracts-client` and cached briefly in Redis — this module is intentionally not a second source of truth for fund amounts.
 
-Generar Migración: (Ejecutar después de modificar una entidad .entity.ts)
+**`agents`**
+Manages field agent lifecycle: registration, KYC gating, stake-bond status (read from the relevant contract), and the milestone attestation submission endpoint. Attestation submissions (GPS + photo + signature) are received here, validated, and forwarded to the escrow contract; the photo/GPS evidence itself is stored in object storage (not in Postgres) with only a reference hash kept in the database for audit purposes.
 
-Bash
-npm run migration:generate -- src/database/migrations/NombreDeLaMigracion
-Aplicar Migraciones: (Sincroniza tu base de datos local con los últimos cambios)
+**`marketplace`**
+Metadata layer for harvest listings and forward contracts. Listing creation here triggers the corresponding on-chain marketplace contract call; this module does not hold buyer funds at any point.
 
-Bash
-npm run migration:run
-Revertir Cambios: (Deshace la última migración aplicada)
+**`insurance`**
+Read-side API for risk reserve balance and payout history, sourced from the indexer rather than querying the chain directly on every request (avoids redundant RPC load — see Indexer below).
 
-Bash
-npm run migration:revert
+**`notifications`**
+Listens to indexer-emitted events (funding milestones hit, payout triggered, dispute opened) and a job queue (BullMQ on Redis) fans these out as email/SMS/push. SMS is treated as a first-class channel given the target user base may not reliably use a mobile app.
 
-3. Buenas Prácticas 
-Nunca modifiques manualmente las tablas en la base de datos; usa siempre archivos de migración.
+### Database Schema (high level)
 
-Revisa el archivo generado en src/database/migrations/ antes de hacer commit para asegurar que el SQL es el esperado.
+```text
+User            (id, role, wallet_address, kyc_status, kyc_credential_ref, ...)
+Campaign        (id, farmer_id|cooperative_id, contract_address, status, milestones[], ...)
+Agent           (id, user_id, stake_status, region, ...)
+Attestation     (id, campaign_id, agent_id, milestone, evidence_hash, status, signed_at)
+Listing         (id, campaign_id, product, quantity, price, status)
+ForwardContract (id, listing_id, buyer_id, locked_price, status)
+Notification    (id, user_id, type, payload, sent_at)
+```
 
-Asegúrate de que tu archivo .env apunte al puerto 5433 si usas el entorno Docker provisto.
+This is intentionally a thin schema — campaign financials, position-token ownership, and reputation scores are sourced from chain/indexer, not duplicated here, to avoid drift between on-chain truth and off-chain cache.
+
+### Key REST Endpoints (representative, not exhaustive)
+
+```text
+POST   /auth/challenge
+POST   /auth/verify
+GET    /campaigns
+POST   /campaigns
+GET    /campaigns/:id
+POST   /campaigns/:id/milestones/:milestoneId/attest
+GET    /agents/:id/status
+POST   /marketplace/listings
+POST   /marketplace/forward-contracts
+GET    /investors/:walletAddress/positions
+GET    /reputation/:entityId
+```
+
+### WebSocket Events
+
+```text
+campaign.fundingUpdated
+campaign.milestoneAttested
+campaign.milestoneDisputed
+insurance.payoutTriggered
+marketplace.listingSold
+```
+
+Used by the frontend dashboard for live status without polling.
+
+---
+
+## 2. `indexer/` — Contract Event Indexer
+
+### Responsibility
+
+Soroban contract state is optimized for contract execution, not for analytics or historical queries ("show me this investor's funding history across all campaigns" is expensive to compute directly from chain state on every request). The indexer solves this by subscribing to contract events, persisting them into a queryable store, and serving aggregate views to the `api` service and notification pipeline.
+
+### Tech Stack
+
+- Node.js worker process
+- Stellar RPC / Soroban event subscription
+- PostgreSQL (separate schema or database from `api`, to isolate write load)
+- Redis (for pub/sub fan-out to `notifications`)
+
+### Folder Structure
+
+```text
+indexer/
+├── src/
+│   ├── listeners/
+│   │   ├── fundingPool.listener.ts
+│   │   ├── escrow.listener.ts
+│   │   ├── marketplace.listener.ts
+│   │   ├── repayment.listener.ts
+│   │   ├── insurance.listener.ts
+│   │   └── reputation.listener.ts
+│   ├── aggregators/
+│   │   ├── campaignHistory.ts
+│   │   ├── investorPortfolio.ts
+│   │   └── reputationTrend.ts
+│   ├── db/
+│   │   ├── schema/
+│   │   └── migrations/
+│   └── main.ts
+└── package.json
+```
+
+### How It Works
+
+1. Each `listener` subscribes to a specific contract's emitted events (deposit made, milestone released, payout distributed, position transferred, reputation updated).
+2. Raw events are persisted append-only (event log, never mutated) for auditability.
+3. `aggregators` run on a schedule or on-event to build denormalized views — e.g., `investorPortfolio` maintains a running per-wallet summary so `GET /investors/:walletAddress/positions` in `api` is a fast read rather than a chain scan.
+4. New events are also published to Redis so `notifications` can react in near-real-time without polling Postgres.
+
+### Reindexing & Recovery
+
+The indexer tracks the last processed ledger sequence per contract. On restart, it resumes from that checkpoint. A full reindex (from contract genesis) is supported as a recovery path if aggregate tables ever need to be rebuilt — this is why raw events are kept append-only rather than only storing aggregates.
+
+---
+
+## 3. `oracle-service/` — Off-Chain Data Bridge
+
+### Responsibility
+
+Two parts of the protocol need real-world data the chain cannot natively access:
+
+- **Parametric insurance** needs rainfall/weather data to evaluate payout triggers.
+- **Milestone verification** is strengthened by satellite/NDVI crop-health data cross-checked against agent attestations (Phase 2).
+
+This service is the only backend component that **submits** data on-chain (as opposed to only reading); it is treated as a higher-trust component and is run with its own restricted signing key, separate from the `api` service's operational key.
+
+### Folder Structure
+
+```text
+oracle-service/
+├── src/
+│   ├── weather/
+│   │   ├── provider.ts          # Weather data provider client
+│   │   └── trigger-evaluator.ts # Compares observed data against campaign insurance thresholds
+│   ├── satellite/
+│   │   ├── provider.ts          # NDVI/imagery provider client
+│   │   └── milestone-crosscheck.ts
+│   ├── submission/
+│   │   └── oracleTxBuilder.ts   # Builds and signs the on-chain oracle update transaction
+│   └── main.ts
+├── config/
+│   └── providers.config.ts
+└── package.json
+```
+
+### How It Works
+
+1. On a schedule (e.g., daily during a campaign's growing window), `weather/provider.ts` pulls rainfall data for each active campaign's registered region.
+2. `trigger-evaluator.ts` compares observed data against the campaign's insurance contract thresholds.
+3. If a threshold condition is met (or for routine updates, regardless), `oracleTxBuilder.ts` constructs a signed transaction updating the relevant contract's oracle-readable state.
+4. The `insurance` contract independently evaluates whether a payout condition is satisfied — this service supplies data, it does not decide payouts. That logic lives on-chain so it's auditable and not solely trusted from an off-chain process.
+
+### Why This Is a Separate Service
+
+Keeping oracle submission isolated from the general-purpose `api` service limits blast radius: a compromised or buggy API deployment cannot forge oracle data, and the oracle signing key never needs to be available to the broader application server.
+
+---
+
+## Environment Variables (representative)
+
+```text
+# api
+DATABASE_URL=
+REDIS_URL=
+JWT_SECRET=
+STELLAR_NETWORK=testnet|mainnet
+STELLAR_RPC_URL=
+STELLAR1KYC_API_URL=
+STELLAR1KYC_API_KEY=
+
+# indexer
+INDEXER_DATABASE_URL=
+STELLAR_RPC_URL=
+CONTRACT_ADDRESSES_JSON=
+
+# oracle-service
+ORACLE_SIGNING_KEY=          # restricted key, never shared with api
+WEATHER_PROVIDER_API_KEY=
+SATELLITE_PROVIDER_API_KEY=
+STELLAR_RPC_URL=
+```
+
+Secrets are expected to be injected via the deployment environment (not committed) — see `.env.example` in each service for the full list.
+
+---
+
+## Local Development
+
+```bash
+# from backend/api
+npm install
+npx prisma migrate dev
+npm run start:dev
+
+# from backend/indexer
+npm install
+npm run start:dev
+
+# from backend/oracle-service
+npm install
+npm run start:dev
+```
+
+All three can run concurrently against a local Postgres + Redis instance (a `docker-compose.yml` for these dependencies is recommended at the `backend/` root, even though service code stays split by directory).
+
+---
+
+## Testing
+
+- **`api`**: unit tests per module (Jest), plus integration tests against a test Soroban network (Futurenet/testnet) for the `contracts-client` wrapper.
+- **`indexer`**: replay-based tests using recorded contract event fixtures to verify aggregator correctness.
+- **`oracle-service`**: trigger-evaluator logic is tested with historical weather data fixtures to confirm payout thresholds fire correctly without needing live provider calls in CI.
+
+---
+
+## Security Notes
