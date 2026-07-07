@@ -1,56 +1,185 @@
-Stellara AI – The Intelligent Web3 Crypto Academy
+# FarmExchange — Frontend
 
-Stellara AI is a next-generation Web3 platform built on the Stellar blockchain ecosystem, designed to educate, empower, and connect crypto users through AI-driven learning, social interaction, and real trading tools. The platform combines a crypto learning academy, an AI-powered assistant with voice and chat, a social crypto network, real-time user messaging, live market news, and on-chain trading — all within a single decentralized application. Stellara AI simplifies complex crypto concepts, helps users make informed trading decisions, and creates a collaborative environment where learners and traders grow together.
+> Fund. Grow. Trade.
 
-🧠 Core Features (Polished) 🤖 Stellara AI Assistant
+This package contains the client applications for FarmExchange: a **Next.js web dashboard** (farmers, investors, buyers) and a **React Native mobile app** (field agents + farmers, offline-first).
 
-Text & voice-based AI crypto mentor Explains trading strategies, blockchain concepts, and Stellar-specific tools
+This README covers frontend setup, structure, and conventions only. For protocol, contract, and backend details, see the root [`README.md`](../README.md).
 
-Market insights & educational guidance (Not financial advice — education-focused)
+---
 
-🎓 Crypto Academy
+## Contents
 
-Structured learning paths (Beginner → Pro) Stellar & Soroban smart contract education Interactive quizzes & progress tracking 🗣 Social Crypto Feed Post updates, ideas, and market thoughts Like, comment, repost (tweet-style) Follow other traders & educators
+- [Overview](#overview)
+- [Tech Stack](#tech-stack)
+- [Folder Structure](#folder-structure)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Wallet & Stellar Integration](#wallet--stellar-integration)
+- [Offline-First (Mobile)](#offline-first-mobile)
+- [Conventions](#conventions)
+- [Scripts](#scripts)
+- [Testing](#testing)
 
-💬 Community Chat
+---
 
-One-on-one messaging Group discussions & learning channels Trading & ecosystem-focused rooms
+## Overview
 
-📈 Trading & Wallet
+The frontend is split into two apps that serve different user roles:
 
-Trade Stellar-based assets Freighter wallet integration Portfolio overview & transaction history 📰 News & Market Intelligence
+| App | Users | Purpose |
+|---|---|---|
+| `web/` | Farmers, cooperatives, investors, buyers | Campaign creation, funding, marketplace, dashboards, wallet connection |
+| `mobile/` | Field agents, farmers | Milestone attestation (GPS + photo evidence), status checks, USSD fallback for low-connectivity areas |
 
-Real-time crypto news
+Both apps talk to the same backend API and Soroban contracts, and share types/SDK code from the root `packages/` workspace.
 
-Stellar ecosystem updates
+---
 
-Market trend summaries via AI 🛠 Technology Stack (Optimized for Stellara AI)
+## Tech Stack
 
-Frontend Next.js + TypeScript Tailwind CSS WebSockets (real-time chat & feed)
+### Web (`frontend/web`)
+- **Next.js** (App Router) + **TypeScript**
+- **Tailwind CSS**
+- **Stellar wallet integration** (Freighter / WalletConnect-style connectors)
+- Consumes `packages/sdk` for typed contract calls and `packages/types` for shared interfaces
 
-Blockchain Stellar SDK Soroban Smart Contracts Horizon API Freighter Wallet
+### Mobile (`frontend/mobile`)
+- **React Native**
+- Offline-first sync layer for attestation data captured in low-connectivity rural areas
+- GPS + camera integration for milestone evidence capture
+- USSD fallback path for farmers without smartphone/data access
 
-AI & Voice LLM API (OpenAI or equivalent) Speech-to-Text (Whisper or similar) Text-to-Speech (TTS)
+---
 
-Infrastructure
+## Folder Structure
 
-Docker AWS / Railway / Render Vercel (Frontend)
+```text
+frontend/
+│
+├── web/
+│   ├── src/
+│   │   ├── app/                # Routes/pages (App Router)
+│   │   │   ├── campaigns/      # Campaign creation, browsing, detail views
+│   │   │   ├── dashboard/      # Investor/farmer performance dashboards
+│   │   │   ├── marketplace/    # Harvest listings, forward contracts
+│   │   │   └── auth/           # KYC / wallet connect flows
+│   │   ├── components/         # Shared UI components
+│   │   ├── hooks/               # useWallet, useCampaign, useContract, etc.
+│   │   ├── lib/                 # Wallet connection, Stellar SDK client helpers
+│   │   └── styles/
+│   └── public/
+│
+└── mobile/
+    ├── src/
+    │   ├── screens/             # Attestation flow, farmer status, agent registration
+    │   ├── components/
+    │   └── offline-sync/        # Queues attestations locally, syncs when connectivity returns
+    └── assets/
+```
 
-💎 Why “Stellara AI” Works
+---
 
-✔ Instantly signals AI intelligence ✔ Strong connection to Stellar blockchain ✔ Easy to market & brand ✔ Scales to mobile apps, APIs, and future tools ✔ Sounds credible to investors & partners
+## Getting Started
 
-🚀 Getting Started (Frontend Setup) ✅ Requirements
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- For mobile: Xcode (iOS) and/or Android Studio, plus a configured emulator or physical device
 
-Node.js v18 or higher npm / pnpm
+### Web
 
-installation git clone https://github.com/stellara-network/Stellara_Contracts
-cd Stellara_Contracts,
-cd Frontend
+```bash
+cd frontend/web
+npm install
+npm run dev
+```
+
+App runs at `http://localhost:3000`.
+
+### Mobile
+
+```bash
+cd frontend/mobile
 npm install
 
-▶ Run Development Server npm run dev Open: http://localhost:3000
+# iOS
+npx pod-install
+npm run ios
 
-🏗 Build for Production npm run build npm run start
+# Android
+npm run android
+```
 
-📁 Project Structure src/ ├─ app/ # Next.js App Router pages and layouts ├─ components/ # Reusable UI components ├─ context/ # React Context providers (auth, sockets, user state) ├─ hooks/ # Custom React hooks ├─ lib/ # Utilities, API clients, configs ├─ styles/ # Global styles and Tailwind setup public/ └─ assets/ # Static files (images, icons, fonts)
+---
+
+## Environment Variables
+
+Create a `.env.local` (web) or `.env` (mobile) from the example file in each app directory.
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_STELLAR_NETWORK` | `testnet` or `mainnet` |
+| `NEXT_PUBLIC_HORIZON_URL` | Horizon RPC endpoint |
+| `NEXT_PUBLIC_SOROBAN_RPC_URL` | Soroban RPC endpoint |
+| `NEXT_PUBLIC_API_BASE_URL` | Backend (NestJS) API base URL |
+| `NEXT_PUBLIC_FUNDING_POOL_CONTRACT_ID` | Deployed funding-pool contract ID |
+| `NEXT_PUBLIC_ESCROW_CONTRACT_ID` | Deployed escrow contract ID |
+| `NEXT_PUBLIC_MARKETPLACE_CONTRACT_ID` | Deployed marketplace contract ID |
+| `NEXT_PUBLIC_STELLAR1KYC_ENDPOINT` | Stellar1KYC service endpoint for identity verification |
+| `MOBILE_API_BASE_URL` | Backend API base URL (mobile) |
+| `MOBILE_OFFLINE_QUEUE_LIMIT` | Max queued attestations before forcing sync prompt |
+
+Never commit real `.env` files — only `.env.example`.
+
+---
+
+## Wallet & Stellar Integration
+
+- Web wallet connection is handled in `src/lib/wallet.ts`, wrapping Freighter (and other Stellar-compatible wallets) behind a common interface exposed via `useWallet()`.
+- All contract calls go through `packages/sdk`, which wraps the Soroban contract clients — components should not call contract bindings directly.
+- Transaction signing always happens client-side; the frontend never has access to private keys.
+
+---
+
+## Offline-First (Mobile)
+
+Field agents often work in areas with spotty connectivity. The `offline-sync/` module:
+
+1. Captures attestation submissions (GPS + photo + signature) locally first.
+2. Queues them in local storage.
+3. Syncs to the backend indexer/API as soon as connectivity is available.
+4. Surfaces sync status to the agent so they know what's pending vs. confirmed.
+
+USSD flows are handled separately as a fallback for farmers without the app installed, routed through the backend rather than the mobile client itself.
+
+---
+
+## Conventions
+
+- **Components:** functional components + hooks only, no class components.
+- **Styling:** Tailwind utility classes; avoid inline styles except for dynamic values.
+- **Types:** shared types come from `packages/types` — don't redefine campaign/investor/contract shapes locally.
+- **Contract calls:** always via `packages/sdk`, never raw RPC calls from components.
+- **Naming:** camelCase for variables/functions, PascalCase for components, kebab-case for file names in `app/`.
+
+---
+
+## Scripts
+
+| Command | App | Description |
+|---|---|---|
+| `npm run dev` | web | Start local dev server |
+| `npm run build` | web | Production build |
+| `npm run lint` | web/mobile | Run ESLint |
+| `npm run ios` / `npm run android` | mobile | Run on simulator/device |
+| `npm test` | web/mobile | Run test suite |
+
+---
+
+## Testing
+
+- **Web:** component tests colocated with components; integration tests for campaign/funding flows against a local Soroban testnet deployment.
+- **Mobile:** unit tests for the offline-sync queue logic are the highest priority, since sync correctness directly affects milestone verification integrity.
+
+---
